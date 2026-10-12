@@ -1,0 +1,12 @@
+// Privileged role activated through PIM
+// Every just-in-time elevation should be visible: who activated which role,
+// when, and the justification they gave. Informational severity: this is
+// expected behavior, but it is the audit trail an assessor asks for.
+AuditLogs
+| where OperationName == "Add member to role completed (PIM activation)"
+| extend Actor = tostring(InitiatedBy.user.userPrincipalName)
+| mv-apply Target = TargetResources on (
+    where tostring(Target.type) == "Role"
+    | extend Role = tostring(Target.displayName)
+  )
+| project TimeGenerated, Actor, Role, Justification = ResultReason, CorrelationId

@@ -1,0 +1,10 @@
+// AWS IAM user created outside of IAM Identity Center
+// In this design every human gets AWS access through Entra -> SCIM ->
+// IAM Identity Center. A locally created IAM user is an identity that
+// Entra does not know about: no Conditional Access, no access reviews,
+// and the leaver process will never remove it.
+AWSCloudTrail
+| where EventSource == "iam.amazonaws.com" and EventName == "CreateUser"
+| extend NewIamUser = tostring(parse_json(RequestParameters).userName)
+| project TimeGenerated, CreatedBy = UserIdentityArn, UserIdentityType,
+          NewIamUser, SourceIpAddress, AWSRegion

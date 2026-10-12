@@ -1,0 +1,17 @@
+// Entra directory role assigned outside of PIM
+// Role assignments made by PIM are initiated by the "MS-PIM" service.
+// A direct "Add member to role" from anything else means someone created
+// standing privileged access that bypasses just-in-time activation,
+// approval, and expiry.
+AuditLogs
+| where OperationName == "Add member to role"
+| where tostring(InitiatedBy.app.displayName) != "MS-PIM"
+| extend Actor = coalesce(
+    tostring(InitiatedBy.user.userPrincipalName),
+    tostring(InitiatedBy.app.displayName))
+| extend TargetUser = tostring(TargetResources[0].userPrincipalName)
+| mv-apply Prop = TargetResources[0].modifiedProperties on (
+    where tostring(Prop.displayName) == "Role.DisplayName"
+    | extend Role = trim('"', tostring(Prop.newValue))
+  )
+| project TimeGenerated, Actor, TargetUser, Role, CorrelationId

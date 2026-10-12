@@ -1,0 +1,26 @@
+// AWS console sign-in after the user was disabled in Entra ID
+// Cross-cloud leaver check. Disabling a user in Entra blocks new sign-ins,
+// and SCIM disables the AWS user on its next cycle, but an AWS access
+// portal session that already exists can outlive both. This joins the
+// Entra "account disabled" audit event to any later AWS console sign-in
+// by the same person.
+// Identity Center console sessions appear as an assumed role named
+// AWSReservedSSO_<permission set>_<suffix>/<username>, where <username> is
+// the SCIM userName (mapped from the Entra UPN).
+let DisabledInEntra =
+    AuditLogs
+    | where TimeGenerated > ago(1d)
+    | extend Props = tostring(TargetResources[0].modifiedProperties)
+    | where OperationName == "Disable account"
+        or (OperationName == "Update user" and Props has "AccountEnabled" and Props has "false")
+    | extend DisabledUpn = tolower(tostring(TargetResources[0].userPrincipalName))
+    | summarize DisabledTime = min(TimeGenerated) by DisabledUpn;
+AWSCloudTrail
+| where TimeGenerated > ago(1d)
+| where EventName == "ConsoleLogin"
+| where UserIdentityArn has "AWSReservedSSO_"
+| extend AwsUser = tolower(tostring(split(UserIdentityArn, "/")[2]))
+| join kind=inner DisabledInEntra on $left.AwsUser == $right.DisabledUpn
+| where TimeGenerated > DisabledTime
+| project TimeGenerated, AwsUser, DisabledTime, UserIdentityArn,
+          SourceIpAddress, AWSRegion

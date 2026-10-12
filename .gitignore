@@ -1,0 +1,16 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+crash.log
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db

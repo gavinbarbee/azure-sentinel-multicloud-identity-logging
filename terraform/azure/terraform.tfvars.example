@@ -1,0 +1,8 @@
+subscription_id   = "00000000-0000-0000-0000-000000000000"
+location          = "eastus2"
+daily_quota_gb    = 1
+retention_in_days = 90
+
+# Flip to true only after data is flowing (see README Steps 3 and 9)
+deploy_entra_rules = false
+deploy_aws_rules   = false
