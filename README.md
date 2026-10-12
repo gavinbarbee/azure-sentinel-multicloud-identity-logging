@@ -112,8 +112,9 @@ terraform apply main.tfplan
 
 This creates the resource group, the workspace (1 GB/day ingestion cap, 90-day retention), onboards Sentinel, and sends Entra ID sign-in and audit logs plus the subscription Activity Log to the workspace. Analytics rules are switched off on this first apply (see Step 9).
 
-📸 `screenshots/01-terraform-apply-azure.png`
-📸 `screenshots/02-entra-diagnostic-setting.png`
+![Terraform state and outputs for the Azure stack](screenshots/01-terraform-apply-azure.png)
+
+![Entra ID diagnostic setting sending logs to the workspace](screenshots/02-entra-diagnostic-setting.png)
 
 ### Step 3: Verify Entra logs are arriving
 
@@ -124,7 +125,7 @@ union SigninLogs, AuditLogs
 | summarize Events = count() by Type, bin(TimeGenerated, 1h)
 ```
 
-📸 `screenshots/03-entra-logs-arriving.png`
+![Entra sign-in and audit logs arriving in the workspace](screenshots/03-entra-logs-arriving.png)
 
 ### Step 4: Deploy the AWS side (CloudTrail, S3, SQS, federated role)
 
@@ -149,7 +150,7 @@ terraform output
 
 This creates a multi-region CloudTrail trail with log file validation, an encrypted private S3 bucket, an SQS queue that receives a message each time a new log file lands, and an IAM role that Sentinel assumes through OIDC federation. The role's trust policy only accepts sessions for my specific workspace, and its permissions are read-only on that one bucket and queue. No AWS access keys exist anywhere in this design.
 
-📸 `screenshots/04-terraform-apply-aws.png`
+![Terraform state and outputs for the AWS stack](screenshots/04-terraform-apply-aws.png)
 
 ### Step 5: Connect Sentinel to AWS
 
@@ -158,7 +159,7 @@ Microsoft Sentinel now lives in the Microsoft Defender portal (security.microsof
 1. **Microsoft Sentinel** → **Content hub** → install the **Amazon Web Services** solution.
 2. **Microsoft Sentinel** → **Data connectors** → **Amazon Web Services S3** → add a new collector with the `sentinel_role_arn` and `sqs_queue_url` outputs, data type **CloudTrail**.
 
-📸 `screenshots/05-aws-s3-connector.png`
+![Amazon Web Services S3 connector connected in Sentinel](screenshots/05-aws-s3-connector.png)
 
 ### Step 6: Verify CloudTrail logs are arriving
 
@@ -177,7 +178,7 @@ AWSCloudTrail
 | order by TimeGenerated asc
 ```
 
-📸 `screenshots/06-cloudtrail-logs-arriving.png`
+![CloudTrail sign-in and IAM events in the workspace](screenshots/06-cloudtrail-logs-arriving.png)
 
 ### Step 7: Generate identity activity in both clouds
 
@@ -203,11 +204,11 @@ Before turning detections on, I looked at the actual events from Step 7 to confi
 
 Disabling her in Entra blocked new Entra sign-ins, but it did nothing to the AWS access portal session she already had. That session kept handing out console sign-ins after she was "terminated."
 
-📸 `screenshots/07-session-outlived-disable.png`
+![Avery's AWS console still open after the Entra disable](screenshots/07-session-outlived-disable.png)
 
 **The join key:** for an Identity Center console sign-in, the CloudTrail `UserIdentityArn` is `assumed-role/AWSReservedSSO_<permission set>_<suffix>/<username>`, and the last segment is the full Entra UPN (SCIM maps the UPN to the AWS `userName`). That's what [detection 05](detections/05-aws-console-login-after-entra-disable.kql) joins on against the `AuditLogs` disable event. When I ran it by hand at 19:19 it returned two sign-ins, at 19:11:27 and 19:11:56. The 19:13:44 sign-in hadn't been ingested yet. The alert in Defender later showed all three.
 
-📸 `screenshots/08-leaver-detection-query.png`
+![Leaver detection query returning sign-ins after the disable](screenshots/08-leaver-detection-query.png)
 
 **Leaver runbook (what actually ended her access):**
 
@@ -238,7 +239,7 @@ terraform apply main.tfplan
 | 4 | [AWS IAM user outside Identity Center](detections/04-aws-iam-user-outside-identity-center.kql) | Medium | AWS identities Entra doesn't govern |
 | 5 | [AWS console sign-in after Entra disable](detections/05-aws-console-login-after-entra-disable.kql) | High | Access that outlives a termination, across clouds |
 
-📸 `screenshots/09-analytics-rules.png`
+![The five analytics rules enabled in Sentinel](screenshots/09-analytics-rules.png)
 
 ### Step 10: Review the incidents
 
@@ -246,8 +247,9 @@ All five rules fired on the real test data from Step 7, creating six incidents (
 
 The role-assigned-outside-PIM rule firing confirms that a role assigned directly through the Graph API is logged as a direct assignment, not by MS-PIM, which is exactly the gap detection 03 is meant to catch.
 
-📸 `screenshots/10-incidents.png`
-📸 `screenshots/10b-incident-detail.png`
+![Incidents created by each rule](screenshots/10-incidents.png)
+
+![Leaver alert details in the Microsoft Defender portal](screenshots/10b-incident-detail.png)
 
 ### Step 11: Map everything to NIST SP 800-171
 
